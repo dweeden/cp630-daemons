@@ -1,9 +1,9 @@
 import time
 import mysql.connector
 from mysql.connector import Error
-#import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 
-DELAY = 1
+DELAY = 0.5
 PIN_LIST = [3, 4, 17, 27, 22, 10, 9, 11]
 MOST_RECENT_STATE_CHANGE_REQUEST_QUERY = "select * from relay_setting order by created_at desc limit 1"
 DATABASE_HOST = "localhost"
@@ -11,9 +11,9 @@ DATABASE_NAME = "worker"
 DATABASE_USER = "cp630"
 DATABASE_PASSWORD = "cp630"
 
-# GPIO.setmode(GPIO.BCM)
-# GPIO.setup(PIN_LIST, GPIO.OUT)
-# GPIO.output(PIN_LIST, GPIO.HIGH)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(PIN_LIST, GPIO.OUT)
+GPIO.output(PIN_LIST, GPIO.HIGH)
 
 connection = None
 cursor = None
@@ -49,13 +49,15 @@ try:
                     # chance of two incompatible things being on simultaneously
                     # NOTE: relay board is active low
                     print(f"updating relay states to -> {pattern}")
-                    #GPIO.output(off, GPIO.HIGH)
-                    #GPIO.output(on, GPIO.LOW)
+                    GPIO.output(off, GPIO.HIGH)
+                    GPIO.output(on, GPIO.LOW)
 
                     # save last pattern to reduce unnecessary calls to gpio
                     lastPattern = pattern
 
             time.sleep(DELAY)
+    else:
+        print("Couldn't connect to to worker database")
 
 except Error as e:
     print(e)
@@ -66,5 +68,5 @@ finally:
         cursor.close()
     if connection is not None and connection.is_connected():
         connection.close()
-
-    #GPIO.cleanup()
+    GPIO.output(PIN_LIST, GPIO.HIGH)
+    GPIO.cleanup()
