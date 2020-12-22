@@ -1,0 +1,15 @@
+[Unit]
+Description=Relay Watcher Service
+After=multi-user.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/bin/relay_watcher.py
+StandardInput=tty-force
+StandardOutput=journal
+StandardError=journal
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
