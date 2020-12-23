@@ -45,7 +45,7 @@ try:
         print("Connected to worker database")
 
         # open cursor and update transaction isolation level so we can see results from other processes
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         cursor.execute("set session transaction isolation level read committed")
 
         # main relay watcher loop
@@ -59,7 +59,7 @@ try:
             if mostRecentRSR is not None:
 
                 # fetch pattern and validate
-                pattern = mostRecentRSR[4]
+                pattern = mostRecentRSR["states"]
                 if pattern is None:
                     raise Exception("Empty pattern value")
                 elif not re.search(STATES_VALIDATION_REGEX, pattern):
@@ -81,10 +81,10 @@ try:
                     GPIO.output(off, GPIO.HIGH if ACTIVE_LOW else GPIO.LOW)
                     GPIO.output(on, GPIO.LOW if ACTIVE_LOW else GPIO.HIGH)
 
-                    if mostRecentRSR[3] is None:
+                    if mostRecentRSR["processed_at"] is None:
                         # update processed time
                         cursor.execute(MOST_RECENT_RELAY_SETTINGS_RECORD_UPDATE_COMMAND,
-                                       (datetime.now(), mostRecentRSR[0]))
+                                       (datetime.now(), mostRecentRSR["id"]))
                         connection.commit()
 
                     # save last pattern to allow for reducing unnecessary calls to gpio
