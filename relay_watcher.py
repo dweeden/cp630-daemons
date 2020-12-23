@@ -1,20 +1,36 @@
+import re
+import signal
+import sys
 import time
-import mysql.connector
-from mysql.connector import Error
-import RPi.GPIO as GPIO
+from datetime import datetime
 
-LOOP_SLEEP = 0.5
-PIN_LIST = [3, 4, 17, 27, 22, 10, 9, 11]
+import RPi.GPIO as GPIO
+import mysql.connector
+
+POLLING_INTERVAL = 1
+ACTIVE_LOW = True
+FULL_PIN_LIST = [3, 4, 17, 27, 22, 10, 9, 11]
+STATES_VALIDATION_REGEX = "^[01]{8}$"
 DATABASE_HOST = "localhost"
 DATABASE_NAME = "worker"
 DATABASE_USER = "cp630"
 DATABASE_PASSWORD = "cp630"
-MOST_RECENT_STATE_CHANGE_REQUEST_QUERY = "select * from relay_setting order by created_at desc limit 1"
+MOST_RECENT_RELAY_SETTINGS_RECORD_SELECT_COMMAND = "select * from relay_setting order by created_at desc limit 1"
+MOST_RECENT_RELAY_SETTINGS_RECORD_UPDATE_COMMAND = "update relay_setting set processed_at = %s where id = %s"
 
-# initialize pins to off
+
+def signal_handler(sig, frame):
+    print('Script terminating')
+    sys.exit(0)
+
+
+# register for clean exit
+signal.signal(signal.SIGINT, signal_handler)
+
+# initialize and set pins to off
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(PIN_LIST, GPIO.OUT)
-GPIO.output(PIN_LIST, GPIO.HIGH)
+GPIO.setup(FULL_PIN_LIST, GPIO.OUT)
+GPIO.output(FULL_PIN_LIST, GPIO.HIGH if ACTIVE_LOW else GPIO.LOW)
 
 cursor = None
 connection = None
@@ -22,7 +38,8 @@ lastPattern = ""
 try:
 
     # connect to database
-    connection = mysql.connector.connect(host=DATABASE_HOST, database=DATABASE_NAME, user=DATABASE_USER, password=DATABASE_PASSWORD, auth_plugin='mysql_native_password')
+    connection = mysql.connector.connect(host=DATABASE_HOST, database=DATABASE_NAME, user=DATABASE_USER,
+                                         password=DATABASE_PASSWORD, auth_plugin='mysql_native_password')
 
     if connection.is_connected():
         print("Connected to worker database")
@@ -31,42 +48,56 @@ try:
         cursor = connection.cursor()
         cursor.execute("set session transaction isolation level read committed")
 
+        # main relay watcher loop
+        print("Starting main relay watcher loop")
         while True:
 
-            # fetch most recent state change request
-            cursor.execute(MOST_RECENT_STATE_CHANGE_REQUEST_QUERY)
-            mostRecentSCR = cursor.fetchone()
+            # fetch most recent relay settings record
+            cursor.execute(MOST_RECENT_RELAY_SETTINGS_RECORD_SELECT_COMMAND)
+            mostRecentRSR = cursor.fetchone()
 
-            if mostRecentSCR is not None:
-                pattern = mostRecentSCR[3]
+            if mostRecentRSR is not None:
+
+                # fetch pattern and validate
+                pattern = mostRecentRSR[4]
+                if pattern is None:
+                    raise Exception("Empty pattern value")
+                elif not re.search(STATES_VALIDATION_REGEX, pattern):
+                    raise Exception(f"Illegal pattern {pattern}")
+
                 if pattern != lastPattern:
-                    # determine on/off lists
+                    # construct on/off lists
                     on = []
                     off = []
                     for i in range(0, 8):
                         if pattern[i] == "1":
-                            on.append(PIN_LIST[i])
+                            on.append(FULL_PIN_LIST[i])
                         else:
-                            off.append(PIN_LIST[i])
+                            off.append(FULL_PIN_LIST[i])
 
                     # set relay states, applying off list first to minimize the
                     # chance of two incompatible things being on simultaneously
-                    # NOTE: relay board is active low
-                    print(f"Updating relay states to -> { pattern }")
-                    GPIO.output(off, GPIO.HIGH)
-                    GPIO.output(on, GPIO.LOW)
+                    print(f"Updating relay states to -> {pattern}")
+                    GPIO.output(off, GPIO.HIGH if ACTIVE_LOW else GPIO.LOW)
+                    GPIO.output(on, GPIO.LOW if ACTIVE_LOW else GPIO.HIGH)
 
-                    # save last pattern to reduce unnecessary calls to gpio
+                    if mostRecentRSR[3] is None:
+                        # update processed time
+                        cursor.execute(MOST_RECENT_RELAY_SETTINGS_RECORD_UPDATE_COMMAND,
+                                       (datetime.now(), mostRecentRSR[0]))
+                        connection.commit()
+
+                    # save last pattern to allow for reducing unnecessary calls to gpio
                     lastPattern = pattern
 
-            time.sleep(LOOP_SLEEP)
+            # sleep
+            time.sleep(POLLING_INTERVAL)
 
     else:
         print("Couldn't connect to to worker database")
 
-except Error as e:
-    print("Exception encountered")
-    print(e)
+except Exception as error:
+    print(f'Exception = {error.args[0]}')
 
 finally:
     # cleanup
@@ -75,7 +106,7 @@ finally:
         cursor.close()
     if connection is not None and connection.is_connected():
         connection.close()
-    GPIO.output(PIN_LIST, GPIO.HIGH)
+    GPIO.output(FULL_PIN_LIST, GPIO.HIGH if ACTIVE_LOW else GPIO.LOW)
     GPIO.cleanup()
 
 print("Script has completed")
