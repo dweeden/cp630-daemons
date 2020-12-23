@@ -1,0 +1,15 @@
+[Unit]
+Description=Sensor Relay Service
+After=multi-user.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/bin/sensor_reader.py
+StandardInput=tty-force
+StandardOutput=journal
+StandardError=journal
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
