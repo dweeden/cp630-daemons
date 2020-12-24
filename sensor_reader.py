@@ -7,7 +7,7 @@ import adafruit_dht
 import board
 import mysql.connector
 
-POLLING_INTERVAL_SECONDS = 30
+POLLING_INTERVAL_SECONDS = 15
 RETRY_INTERVAL = 0.1
 DATABASE_HOST = "localhost"
 DATABASE_NAME = "worker"
