@@ -10,7 +10,7 @@ import mysql.connector
 POLLING_INTERVAL = 1
 ACTIVE_LOW = True
 FULL_PIN_LIST = [3, 4, 17, 27, 22, 10, 9, 11]
-STATES_VALIDATION_REGEX = "^[01]{8}$"
+STATES_VALIDATION_REGEX = "^[01_]{8}$"
 DATABASE_HOST = "localhost"
 DATABASE_NAME = "worker"
 DATABASE_USER = "cp630"
@@ -67,19 +67,19 @@ try:
 
                 if pattern != lastPattern:
                     # construct on/off lists
-                    on = []
-                    off = []
+                    onList = []
+                    offList = []
                     for i in range(0, 8):
-                        if pattern[i] == "1":
-                            on.append(FULL_PIN_LIST[i])
-                        else:
-                            off.append(FULL_PIN_LIST[i])
+                        if pattern[i] == "0":
+                            offList.append(FULL_PIN_LIST[i])
+                        elif pattern[i] == "1":
+                            onList.append(FULL_PIN_LIST[i])
 
                     # set relay states, applying off list first to minimize the
                     # chance of two incompatible things being on simultaneously
                     print(f"Updating relay states to -> {pattern}")
-                    GPIO.output(off, GPIO.HIGH if ACTIVE_LOW else GPIO.LOW)
-                    GPIO.output(on, GPIO.LOW if ACTIVE_LOW else GPIO.HIGH)
+                    GPIO.output(offList, GPIO.HIGH if ACTIVE_LOW else GPIO.LOW)
+                    GPIO.output(onList, GPIO.LOW if ACTIVE_LOW else GPIO.HIGH)
 
                     if mostRecentRSR["processed_at"] is None:
                         # update processed time
