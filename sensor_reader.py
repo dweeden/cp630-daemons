@@ -7,13 +7,13 @@ import adafruit_dht
 import board
 import mysql.connector
 
-POLLING_INTERVAL = 60
+POLLING_INTERVAL_SECONDS = 15
 RETRY_INTERVAL = 0.1
 DATABASE_HOST = "localhost"
 DATABASE_NAME = "worker"
 DATABASE_USER = "cp630"
 DATABASE_PASSWORD = "cp630"
-SENSOR_READING_INSERT_COMMAND = "insert into sensor_reading (created_at, temp, humidity) VALUES (%s, %s, %s)"
+SENSOR_READING_INSERT_COMMAND = "insert into sensor_reading (temp, humidity) VALUES (%s, %s)"
 
 
 def signal_handler(sig, frame):
@@ -57,7 +57,7 @@ try:
 
                 # data is valid -> persist
                 # print(f"Temp: {t} C, Humidity: {h}%")
-                cursor.execute(SENSOR_READING_INSERT_COMMAND, (datetime.now(), t, h))
+                cursor.execute(SENSOR_READING_INSERT_COMMAND, (t, h))
                 connection.commit()
 
             except Exception as error:
@@ -67,7 +67,7 @@ try:
                 continue
 
             # sleep
-            time.sleep(POLLING_INTERVAL)
+            time.sleep(POLLING_INTERVAL_SECONDS)
 
     else:
         print("Couldn't connect to to worker database")
